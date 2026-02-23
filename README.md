@@ -2,6 +2,8 @@
 Đổi tên toàn bộ các thư mục, tệp tin tiếng việt thành không dấu, xóa các ký tự dấu cách thừa, khôi phục tên từ Backup, đổi dấu cách thành _ để giảm chiều dài tên file.
 File .exe chạy ngay không cần cài Python.
 Have fun!
+----------------------------------------------
+Cài pip install unidecode trước khi chạy chương trình
 
 
-<img width="1185" height="909" alt="image" src="https://github.com/user-attachments/assets/9976cf04-fbed-4fe9-a0d0-3f72c727d8a5" />
+<img width="1186" height="909" alt="image" src="https://github.com/user-attachments/assets/9b546c36-cebb-44ad-a32a-98a447eee3a1" />
