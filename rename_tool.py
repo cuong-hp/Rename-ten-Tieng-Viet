@@ -137,6 +137,7 @@ def process_items(root_folder, log_widget, progress_var, root,
     total = count_items(root_folder)
     done = 0
     backup_list = []
+    change_count = 0
 
     for dirpath, dirnames, filenames in os.walk(root_folder, topdown=False):
         # 1. Xử lý Files
@@ -147,6 +148,7 @@ def process_items(root_folder, log_widget, progress_var, root,
                 new_path = os.path.join(dirpath, new_filename)
 
                 if filename != new_filename:
+                    change_count += 1
                     if do_rename:
                         try:
                             final = safe_rename(old_path, new_path)
@@ -172,6 +174,7 @@ def process_items(root_folder, log_widget, progress_var, root,
                 new_path = os.path.join(dirpath, new_dirname)
 
                 if dirname != new_dirname:
+                    change_count += 1
                     if do_rename:
                         try:
                             final = safe_rename(old_path, new_path)
@@ -189,20 +192,21 @@ def process_items(root_folder, log_widget, progress_var, root,
             progress_var.set(int(done / total * 100))
             root.update_idletasks()
 
-    return backup_list
+    return backup_list, change_count
 
 # ---------------- GUI Actions ----------------
 
-def select_folder_and_run(mode):
+current_folder = ""
+
+def preview_action():
+    global current_folder
     folder = filedialog.askdirectory()
     if not folder:
         return
+    current_folder = folder
 
     log_box.delete(1.0, tk.END)
-    if mode == "preview":
-        log_box.insert(tk.END, f"👀 Xem trước tại: {folder}\n\n")
-    else:
-        log_box.insert(tk.END, f"👉 Đang xử lý tại: {folder}\n\n")
+    log_box.insert(tk.END, f"👀 Xem trước tại: {current_folder}\n\n")
 
     progress_var.set(0)
     progress_bar.update()
@@ -210,31 +214,46 @@ def select_folder_and_run(mode):
     create_backup = backup_var.get() == 1
     do_replace_spaces = replace_space_var.get() == 1
 
-    backup_list = process_items(folder, log_box, progress_var, root,
-                                do_rename=(mode == "rename"),
-                                create_backup=create_backup,
-                                replace_spaces=do_replace_spaces)
+    backup_list, changes = process_items(current_folder, log_box, progress_var, root,
+                                       do_rename=False,
+                                       create_backup=create_backup,
+                                       replace_spaces=do_replace_spaces)
 
     progress_var.set(100)
     progress_bar.update()
 
-    if mode == "preview":
-        log_box.insert(tk.END, "\n🔎 Xong xem trước (chưa đổi)!\n")
-        messagebox.showinfo("Xem trước", "Đã hiển thị danh sách.")
-    else:
-        log_box.insert(tk.END, "\n✅ Hoàn tất đổi tên!\n")
-        messagebox.showinfo("Xong", "Đã hoàn tất.")
+    if changes > 0:
+        log_box.insert(tk.END, f"\n🔎 Xong xem trước! Phát hiện {changes} mục cần đổi tên.\n")
+        if messagebox.askyesno("Xác nhận đổi tên", f"Tìm thấy {changes} mục cần đổi tên.\n\nBạn có muốn thực hiện đổi tên ngay bây giờ không?"):
+            log_box.insert(tk.END, f"\n👉 Đang thực hiện đổi tên tại: {current_folder}\n\n")
+            
+            # Thực hiện đổi tên thật
+            backup_list, _ = process_items(current_folder, log_box, progress_var, root,
+                                           do_rename=True,
+                                           create_backup=create_backup,
+                                           replace_spaces=do_replace_spaces)
+            
+            progress_var.set(100)
+            progress_bar.update()
 
-    # Lưu Backup
-    if create_backup and backup_list:
-        try:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            backup_fn = os.path.join(folder, f"rename_backup_{timestamp}.json")
-            with open(backup_fn, "w", encoding="utf-8") as f:
-                json.dump(backup_list, f, ensure_ascii=False, indent=2)
-            log_box.insert(tk.END, f"\n💾 Đã lưu file Backup: {backup_fn}\n")
-        except Exception as e:
-            log_box.insert(tk.END, f"\n❌ Lỗi lưu backup: {e}\n")
+            log_box.insert(tk.END, "\n✅ Hoàn tất đổi tên!\n")
+            messagebox.showinfo("Xong", "Đã hoàn tất quá trình đổi tên.")
+
+            # Lưu Backup
+            if create_backup and backup_list:
+                try:
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    backup_fn = os.path.join(current_folder, f"rename_backup_{timestamp}.json")
+                    with open(backup_fn, "w", encoding="utf-8") as f:
+                        json.dump(backup_list, f, ensure_ascii=False, indent=2)
+                    log_box.insert(tk.END, f"\n💾 Đã lưu file Backup: {backup_fn}\n")
+                except Exception as e:
+                    log_box.insert(tk.END, f"\n❌ Lỗi lưu backup: {e}\n")
+        else:
+            log_box.insert(tk.END, "\n✋ Đã hủy lệnh đổi tên. Bạn có thể xem lại danh sách trên.\n")
+    else:
+        log_box.insert(tk.END, "\n✨ Không có mục nào cần đổi tên (tất cả đã sạch dấu hoặc đúng định dạng).\n")
+        messagebox.showinfo("Thông báo", "Không tìm thấy file hoặc thư mục nào cần đổi tên.")
 
 def select_backup_and_restore():
     """Hàm cho nút Khôi phục"""
@@ -259,14 +278,11 @@ top_frame = tk.Frame(root)
 top_frame.pack(pady=10)
 
 # Hàng 1: Nút bấm
-btn_preview = tk.Button(top_frame, text="👀 Xem trước", command=lambda: select_folder_and_run("preview"), font=("Arial", 11), bg="#dddddd")
-btn_preview.grid(row=0, column=0, padx=5)
-
-btn_rename = tk.Button(top_frame, text="✅ Thực hiện đổi tên", command=lambda: select_folder_and_run("rename"), font=("Arial", 11, "bold"), bg="#aaffaa")
-btn_rename.grid(row=0, column=1, padx=5)
+btn_start = tk.Button(top_frame, text="Xem trước", command=preview_action, font=("Arial", 11, "bold"), bg="#aaffaa")
+btn_start.grid(row=0, column=0, padx=5)
 
 # Nút Khôi phục mới
-btn_restore = tk.Button(top_frame, text="♻️ Khôi phục từ Backup", command=select_backup_and_restore, font=("Arial", 11), bg="#ffcccc")
+btn_restore = tk.Button(top_frame, text="Khôi phục", command=select_backup_and_restore, font=("Arial", 11), bg="#ffcccc")
 btn_restore.grid(row=0, column=2, padx=5)
 
 # Hàng 2: Tùy chọn
